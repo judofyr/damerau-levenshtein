@@ -4,24 +4,25 @@ VALUE DamerauLevenshteinBinding = Qnil;
 
 void Init_damerau_levenshtein();
 
-VALUE method_internal_distance(VALUE self, VALUE _s, VALUE _t, VALUE _block_size, VALUE _max_distance);
+VALUE method_internal_distance(VALUE self, VALUE _s, VALUE _t, VALUE _block_size, VALUE _max_distance, VALUE cost_function);
 
 void Init_damerau_levenshtein() {
 	DamerauLevenshteinBinding = rb_define_module("DamerauLevenshteinBinding");
-	rb_define_method(DamerauLevenshteinBinding, "internal_distance", method_internal_distance, 4);
+	rb_define_method(DamerauLevenshteinBinding, "internal_distance", method_internal_distance, 5);
 }
 
-VALUE method_internal_distance(VALUE self, VALUE _s, VALUE _t, VALUE _block_size, VALUE _max_distance){
+VALUE method_internal_distance(VALUE self, VALUE _s, VALUE _t, VALUE _block_size, VALUE _max_distance, VALUE cost_function){
   VALUE *sv = RARRAY_PTR(_s);
   VALUE *tv = RARRAY_PTR(_t);
-  int i, i1, j, j1, k, half_tl, cost, *d, distance, del, ins, subs, transp, block;
+  int i, i1, j, j1, k, half_tl, block;
+  float cost, *d, distance, del, ins, subs, transp;
   int half_sl;
   int stop_execution = 0;
-  int min = 0;
-  int current_distance = 0;
+  float min = 0;
+  float current_distance = 0;
   int pure_levenshtein = 0;
   int block_size = NUM2INT(_block_size);
-  int max_distance = NUM2INT(_max_distance);
+  float max_distance = NUM2INT(_max_distance);
   int sl = (int) RARRAY_LEN(_s);
   int tl = (int) RARRAY_LEN(_t);
   long long s[sl];
@@ -46,7 +47,7 @@ VALUE method_internal_distance(VALUE self, VALUE _s, VALUE _t, VALUE _block_size
   tl++;
 
   //one-dimentional representation of 2 dimentional array len(s)+1 * len(t)+1
-  d = malloc((sizeof(int))*(sl)*(tl));
+  d = malloc((sizeof(float))*(sl)*(tl));
   //populate 'vertical' row starting from the 2nd position (first one is filled already)
   for(i = 0; i < tl; i++){
     d[i*sl] = i;
@@ -59,8 +60,13 @@ VALUE method_internal_distance(VALUE self, VALUE _s, VALUE _t, VALUE _block_size
     current_distance = 10000;
     for(j = 1; j<tl; j++){
 
-      cost = 1;
-      if(s[i-1] == t[j-1]) cost = 0;
+      if (NIL_P(cost_function)) {
+        cost = (s[i-1] == t[j-1]) ? 0 : 1;
+      } else {
+        VALUE cost_val = rb_funcall(cost_function, rb_intern("call"), 2, INT2NUM(s[i-1]), INT2NUM(t[j-1]));
+        Check_Type(cost_val, T_FLOAT);
+        cost = RFLOAT_VALUE(cost_val);
+      }
 
       half_sl = (sl - 1)/2;
       half_tl = (tl - 1)/2;
@@ -112,5 +118,5 @@ VALUE method_internal_distance(VALUE self, VALUE _s, VALUE _t, VALUE _block_size
   if (stop_execution == 1) distance = current_distance;
 
   free(d);
-  return INT2NUM(distance);
+  return DBL2NUM(distance);
 }
